@@ -1,61 +1,30 @@
-# Crypto Price Alert Bot (Telegram) - Minimal, Railway-friendly
+# Crypto Price Alert Bot - CoinLore + Yahoo Finance (1m candles)
 
-This is a small, stable Telegram price alert bot designed to deploy on Railway's free plan using Python 3.10 and `requests` (no `aiohttp`). Follow the instructions below.
+This repository upgrades the basic CoinLore Telegram alert bot to include technical analysis using Yahoo Finance candles (via yfinance).
 
-## Files included
-- `bot.py` — main bot; uses CoinLore API and APScheduler
-- `requirements.txt` — dependencies (`requests`, `APScheduler`)
-- `Procfile` — `worker: python bot.py` (Railway will run it)
-- `runtime.txt` — `python-3.10.13` (force Python 3.10 on Railway)
-- `.env.example` — template for environment variables (DO NOT commit `.env`)
-- `coinlist.csv` — list of CoinLore IDs (sample)
-- `signals.db` — (created by bot at runtime)
-- `.gitignore` — ignore `.env`, DB and pycache
-- `README.md` — this file
+## Features
+- 1-minute candles (1 day) from Yahoo Finance for TA indicators
+- Indicators: RSI(14), EMA(20/50), SMA(10), MACD(12,26,9)
+- Candlestick detectors: bullish engulfing, hammer
+- Volume spike detection (relative)
+- Pump/Dump detection (CoinLore real-time)
+- Weighted rule engine outputs: STRONG BUY / BUY / SELL / STRONG SELL
+- Alerts are concise (no long explanation) to Telegram chats
+- Price history and alerts log stored in `signals.db` (SQLite)
 
-## Quick local test (Linux / macOS / WSL)
-1. Create and activate a Python 3.10 venv (recommended).
-2. Install requirements:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Create a local `.env` file (copy `.env.example`) and fill TELEGRAM_TOKEN and TELEGRAM_CHAT_ID.
-4. Run locally:
-   ```bash
-   python bot.py
-   ```
-   The bot runs one scan at startup and then every `SCAN_INTERVAL_SECONDS`.
+## Files
+- `bot.py` - main worker
+- `indicators.py` - TA computation and rule engine
+- `coinlist.csv` - CoinLore IDs to monitor
+- `yahoo_mapping.csv` - mapping coinlore_id -> Yahoo symbol (edit to add more)
+- `requirements.txt`, `Procfile`, `runtime.txt` - Railway deployment files
 
-## Deployment to GitHub + Railway (step-by-step)
-1. Create a new GitHub repository (do NOT add a `.env` file).
-2. Commit all files from this project except `.env` (keep `.env.example`).
+## Deployment
+1. Commit to GitHub (do NOT commit real .env)
+2. On Railway set variables in project settings (Variables):
+   - TELEGRAM_TOKEN, TELEGRAM_CHAT_ID, SCAN_INTERVAL_SECONDS, COIN_LIST_PATH, DATABASE_PATH, THRESHOLD_PERCENT, COINLORE_BATCH_SIZE, YAHOO_MAP_PATH, ALERT_COOLDOWN_SECONDS, YF_INTERVAL, YF_PERIOD
+3. Deploy - Railway will run `worker: python bot.py`
 
-   Example (Linux/macOS/WSL):
-   ```bash
-   git init
-   git add .
-   git commit -m "Initial commit - crypto price alert bot"
-   git branch -M main
-   git remote add origin https://github.com/<yourname>/<repo>.git
-   git push -u origin main
-   ```
-
-3. On Railway:
-   - Create a new Project -> Deploy from GitHub and connect your repository.
-   - In Railway's Environment variables section add these keys (exact names):
-     - `TELEGRAM_TOKEN` — your bot token
-     - `TELEGRAM_CHAT_ID` — chat id or channel id
-     - `SCAN_INTERVAL_SECONDS` — e.g. `300`
-     - `COIN_LIST_PATH` — `coinlist.csv`
-     - `DATABASE_PATH` — `signals.db`
-     - `THRESHOLD_PERCENT` — e.g. `2.0`
-     - (optional) `COINLORE_BATCH_SIZE` — `50`
-   - Railway will use `runtime.txt` to select Python 3.10 and auto-run the `Procfile` which executes `worker: python bot.py`.
-
-4. Check logs in Railway to see startup messages and periodic scans.
-
-## Notes / Troubleshooting
-- Do NOT use `aiohttp` or Python 3.11+ on Railway — they are known to cause build issues in this setup.
-- Do not commit real `.env` to GitHub. Use Railway's environment variables UI to store secrets.
-- If you need more sophisticated indicators (RSI/SMA), we can add them later — this is intentionally minimal.
-- `coinlist.csv` must contain CoinLore numeric IDs. Examples are included; replace them with the coins you need.
+## Notes
+- The TA is computed from Yahoo 1m candles sampled by `yfinance`. This is not exchange-native OHLC but it usually provides usable intraday candles for many coins.
+- You can expand `yahoo_mapping.csv` with more CoinLore IDs and symbols. For coins without Yahoo mapping the bot will fallback to computing simple indicators from its stored price history (less accurate).
