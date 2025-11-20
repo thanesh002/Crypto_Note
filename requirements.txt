@@ -2,8 +2,6 @@ requests==2.31.0
 APScheduler==3.10.1
 pandas==2.2.2
 numpy==1.26.4
-
-pandas
-requests
 python-telegram-bot==13.15
+
 
