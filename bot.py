@@ -54,12 +54,15 @@ def check_market():
         tg(msg)
         time.sleep(1)
 
+
 def start():
+    print("Bot is starting…")  # Railway will show this
     tg("🚀 Crypto Alert Bot Started Successfully!")
 
     scheduler = BlockingScheduler()
     scheduler.add_job(check_market, "interval", minutes=5)
 
+    print("Scheduler started")  # Railway will show this
     scheduler.start()
 
 if __name__ == "__main__":
