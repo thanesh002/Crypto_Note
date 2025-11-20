@@ -1,10 +1,11 @@
-90
-80
-58
-518
-2
-1
-99
-257
-48543
-2710
+coinlore_id,symbol,name
+90,BTC,Bitcoin
+80,ETH,Ethereum
+58,XRP,Ripple
+518,USDT,Tether
+2,LTC,Litecoin
+1,DOGE,Dogecoin
+99,SHIB,Shiba Inu
+2710,BNB,Binance Coin
+6535,SOL,Solana
+24478,ADA,Cardano
