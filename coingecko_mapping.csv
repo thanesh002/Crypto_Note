@@ -1,3 +1,4 @@
+coinlore_id,coingecko_id
 90,bitcoin
 80,ethereum
 58,ripple
@@ -6,5 +7,15 @@
 1,dogecoin
 99,shiba-inu
 2710,binancecoin
-33285,solana
-48543,toncoin
+6636,cardano
+5426,solana
+132,polkadot
+1958,tron
+1027,ethereum
+4030,chainlink
+825,usd-coin
+4687,near
+1860,ftx-token
+5030,uniswap
+693,monero
+1956,stellar

@@ -1,2 +1,1 @@
-worker: python bot.py
-
+worker: python bot_coingecko.py
