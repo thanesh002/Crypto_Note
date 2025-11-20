@@ -1,24 +1,66 @@
+import requests
+import csv
 import os
 import time
-import requests
+from apscheduler.schedulers.blocking import BlockingScheduler
 
-TOKEN = os.getenv("8367746826:AAGvDBqPGE0y9eAa8YOoApzGzvfv9CG8zew")
+BOT_TOKEN = os.getenv("8367746826:AAGvDBqPGE0y9eAa8YOoApzGzvfv9CG8zew")
 CHAT_ID = os.getenv("782614632")
 
+def tg(msg):
+    """Send Telegram message"""
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
 
-def send_telegram(msg):
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    payload = {"chat_id": CHAT_ID, "text": msg}
-    r = requests.post(url, json=payload)
-    print("Sent:", r.text)
+def load_coins():
+    """Load coins from CSV (symbol + coinlore ID)"""
+    coins = []
+    with open("coinlist.csv", "r") as f:
+        r = csv.reader(f)
+        next(r)
+        for row in r:
+            coins.append({"symbol": row[0], "id": row[1]})
+    return coins
 
+def get_price(coin_id):
+    """Fetch price from CoinLore"""
+    url = f"https://api.coinlore.net/api/ticker/?id={coin_id}"
+    try:
+        data = requests.get(url, timeout=10).json()
+        return float(data[0]["price_usd"])
+    except:
+        return None
 
-print("Bot started successfully!")
+def get_signal(price):
+    """Simple Buy/Sell logic"""
+    if price is None:
+        return "DEAD"
+    if price < 1:
+        return "STRONG BUY"
+    if 1 <= price < 10:
+        return "BUY"
+    if 10 <= price < 50:
+        return "WAIT"
+    return "SELL"
 
-# test message on deploy
-send_telegram("Crypto bot started on Render! 🚀")
+def check_market():
+    coins = load_coins()
 
-# main loop
-while True:
-    send_telegram("Heartbeat: Bot is running ❤️")  
-    time.sleep(60)
+    for c in coins:
+        price = get_price(c["id"])
+        signal = get_signal(price)
+        msg = f"{c['symbol']} → ${price}\nSignal: {signal}"
+
+        tg(msg)
+        time.sleep(1)
+
+def start():
+    tg("🚀 Crypto Alert Bot Started Successfully!")
+
+    scheduler = BlockingScheduler()
+    scheduler.add_job(check_market, "interval", minutes=5)
+
+    scheduler.start()
+
+if __name__ == "__main__":
+    start()
