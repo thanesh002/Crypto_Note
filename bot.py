@@ -30,6 +30,8 @@ def get_price(coin_id):
         return float(data[0]["price_usd"])
     except:
         return None
+        print(f"Fetching price for ID {coin_id}")
+
 
 def get_signal(price):
     """Simple Buy/Sell logic"""
@@ -53,6 +55,7 @@ def check_market():
 
         tg(msg)
         time.sleep(1)
+print(f"Checking coin: {c['symbol']}")
 
 
 def start():
