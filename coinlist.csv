@@ -1,5 +1,12 @@
-# Put CoinLore coin IDs here, one per line or comma-separated
-# Example: Bitcoin (id 90), Ethereum (id 80)
-90
-80
-1
+# Stable coins (large cap)
+90   # BTC - Bitcoin
+80   # ETH - Ethereum
+58   # XRP - Ripple
+518  # USDT - Tether
+2    # LTC - Litecoin
+1    # DOGE - Dogecoin
+# Trendy coins (mid/high volatility)
+99   # SHIB - Shiba Inu
+2682 # PEPE - Pepe
+51216 # BONK - Bonk
+2710 # BNB - Binance Coin (mid cap representation)
