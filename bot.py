@@ -3,7 +3,7 @@ import requests
 import pandas as pd
 import numpy as np
 from datetime import datetime
-from pytz import utc
+from pytz import timezone
 from apscheduler.schedulers.blocking import BlockingScheduler
 from telegram import Bot
 
@@ -15,15 +15,19 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 COINGECKO_API_KEY = os.getenv("COINGECKO_API_KEY")
 
 if TELEGRAM_TOKEN is None:
-    raise Exception("❌ TELEGRAM_TOKEN missing in Railway ENV!")
+    raise Exception("❌ TELEGRAM_TOKEN missing!")
 if TELEGRAM_CHAT_ID is None:
-    raise Exception("❌ TELEGRAM_CHAT_ID missing in Railway ENV!")
+    raise Exception("❌ TELEGRAM_CHAT_ID missing!")
 
 bot = Bot(token=TELEGRAM_TOKEN)
 
+# ====================================
+# USE PYTZ TIMEZONE (REQUIRED FOR APS)
+# ====================================
+UTC = timezone("UTC")
 
 # =========================
-# COINS TO TRACK (10 coins)
+# COINS (10)
 # =========================
 COINS = {
     90: "bitcoin",
@@ -38,7 +42,6 @@ COINS = {
     825: "monero",
 }
 
-
 # =========================
 # INDICATOR FUNCTIONS
 # =========================
@@ -46,18 +49,13 @@ def calc_rsi(series, period=14):
     delta = series.diff()
     gain = np.where(delta > 0, delta, 0)
     loss = np.where(delta < 0, -delta, 0)
-
     avg_gain = pd.Series(gain).rolling(period).mean()
     avg_loss = pd.Series(loss).rolling(period).mean()
-
     rs = avg_gain / avg_loss
-    rsi = 100 - (100 / (1 + rs))
-    return rsi
-
+    return 100 - (100 / (1 + rs))
 
 def calc_ema(series, period=14):
     return series.ewm(span=period, adjust=False).mean()
-
 
 def calc_macd(series):
     ema12 = calc_ema(series, 12)
@@ -66,21 +64,18 @@ def calc_macd(series):
     signal = macd.ewm(span=9, adjust=False).mean()
     return macd, signal
 
-
 # =========================
-# FETCH FROM COINLORE
+# COINLORE PRICE
 # =========================
-def fetch_coinlore_price(coin_id):
+def fetch_coinlore_price(id):
     try:
-        url = f"https://api.coinlore.net/api/ticker/?id={coin_id}"
-        r = requests.get(url, timeout=10)
+        r = requests.get(f"https://api.coinlore.net/api/ticker/?id={id}", timeout=10)
         return float(r.json()[0]["price_usd"])
     except:
         return None
 
-
 # =========================
-# FETCH OHLC FROM COINGECKO
+# COINGECKO OHLC
 # =========================
 def fetch_coingecko_ohlc(cgid):
     url = f"https://api.coingecko.com/api/v3/coins/{cgid}/market_chart"
@@ -90,10 +85,9 @@ def fetch_coingecko_ohlc(cgid):
         "interval": "hourly",
         "x_cg_demo_api_key": COINGECKO_API_KEY,
     }
-
     r = requests.get(url, params=params, timeout=15)
     if r.status_code != 200:
-        print(f"❌ CG error {cgid}: {r.status_code}")
+        print("CG ERROR:", cgid, r.status_code)
         return None
 
     data = r.json()["prices"]
@@ -101,24 +95,22 @@ def fetch_coingecko_ohlc(cgid):
     df["price"] = df["price"].astype(float)
     return df
 
-
 # =========================
-# SEND ALERT MESSAGE
+# TELEGRAM SEND
 # =========================
 def send(msg):
     bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=msg)
 
-
 # =========================
-# SIGNAL GENERATOR
+# ANALYSIS
 # =========================
 def analyze(coinlore_id, cg_id):
-    price_now = fetch_coinlore_price(coinlore_id)
-    if price_now is None:
+    price = fetch_coinlore_price(coinlore_id)
+    if price is None:
         return
 
     df = fetch_coingecko_ohlc(cg_id)
-    if df is None or len(df) < 20:
+    if df is None or len(df) < 30:
         return
 
     df["rsi"] = calc_rsi(df["price"])
@@ -130,57 +122,47 @@ def analyze(coinlore_id, cg_id):
     macd = df["macd"].iloc[-1]
     signal = df["signal"].iloc[-1]
 
-    condition_messages = []
+    msg = []
 
-    # BUY / SELL
-    if rsi < 30 and price_now > ema20:
-        condition_messages.append("🔥 STRONG BUY (RSI oversold + price above EMA20)")
+    # RSI / BUY / SELL
+    if rsi < 30:
+        msg.append("🔥 STRONG BUY – RSI oversold")
     elif rsi < 40:
-        condition_messages.append("🟢 BUY (RSI low)")
-    elif rsi > 70 and price_now < ema20:
-        condition_messages.append("🔴 STRONG SELL (RSI overbought + price below EMA20)")
+        msg.append("🟢 BUY – RSI low")
+
+    if rsi > 70:
+        msg.append("🔴 STRONG SELL – RSI overbought")
     elif rsi > 60:
-        condition_messages.append("🟡 SELL (RSI high)")
+        msg.append("🟡 SELL – RSI high")
 
     # MACD
     if macd > signal:
-        condition_messages.append("📈 MACD Bullish Crossover")
+        msg.append("📈 MACD Bullish crossover")
     else:
-        condition_messages.append("📉 MACD Bearish Crossover")
+        msg.append("📉 MACD Bearish crossover")
 
-    if not condition_messages:
-        return
-
-    message = f"""
-📊 *{cg_id.upper()} ALERT*
-Price: ${price_now}
-
-{"\n".join(condition_messages)}
-    """
-
-    send(message)
-
+    if msg:
+        send(f"📊 {cg_id.upper()}\nPrice: ${price}\n" + "\n".join(msg))
 
 # =========================
-# JOB LOOP
+# SCAN JOB
 # =========================
 def job():
-    print("🔍 Running scan...")
-    for cid, cgid in COINS.items():
-        analyze(cid, cgid)
-    print("✅ Scan complete")
-
+    print("Scanning…")
+    for cid, cg in COINS.items():
+        analyze(cid, cg)
+    print("Done.")
 
 # =========================
-# MAIN SCHEDULER
+# SCHEDULER
 # =========================
 if __name__ == "__main__":
-    print("🚀 BOT STARTED...")
+    print("🚀 Bot started.")
 
-    sched = BlockingScheduler(timezone=utc)
+    sched = BlockingScheduler(timezone=UTC)
 
-    # every 30s
-    sched.add_job(job, "interval", seconds=30, timezone=utc)
+    # FINAL FIXED LINE:
+    sched.add_job(job, "interval", seconds=30, timezone=UTC)
 
     job()
 
