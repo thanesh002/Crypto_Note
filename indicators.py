@@ -2,7 +2,6 @@
 Indicators and rule engine for TA signals
 Compute from a DataFrame with columns Open, High, Low, Close, Volume (index: datetime)
 """
-
 import pandas as pd
 import numpy as np
 from dataclasses import dataclass
@@ -34,16 +33,16 @@ class CandleInfo:
             return info
         last = df.iloc[-1]
         prev = df.iloc[-2] if len(df) >= 2 else last
-        info.last_close = float(last["Close"])
-        info.last_open = float(last["Open"])
-        info.last_vol = float(last["Volume"]) if "Volume" in last else None
-        prev_body = abs(prev["Close"] - prev["Open"])
-        last_body = abs(last["Close"] - last["Open"])
-        if prev["Close"] < prev["Open"] and last["Close"] > last["Open"] and last_body > prev_body:
+        info.last_close = float(last['Close'])
+        info.last_open = float(last['Open'])
+        info.last_vol = float(last['Volume']) if 'Volume' in last else None
+        prev_body = abs(prev['Close'] - prev['Open'])
+        last_body = abs(last['Close'] - last['Open'])
+        if prev['Close'] < prev['Open'] and last['Close'] > last['Open'] and last_body > prev_body:
             info.is_bullish_engulfing = True
-        body = abs(last["Close"] - last["Open"])
-        lower_wick = min(last["Open"], last["Close"]) - last["Low"]
-        upper_wick = last["High"] - max(last["Open"], last["Close"])
+        body = abs(last['Close'] - last['Open'])
+        lower_wick = min(last['Open'], last['Close']) - last['Low']
+        upper_wick = last['High'] - max(last['Open'], last['Close'])
         if lower_wick > 2 * body and upper_wick < body:
             info.is_hammer = True
         return info
@@ -72,12 +71,12 @@ def compute_macd(series: pd.Series):
 
 def compute_indicators(df: pd.DataFrame) -> IndicatorResult:
     res = IndicatorResult()
-    if "Close" not in df.columns:
-        if "close" in df.columns:
-            df = df.rename(columns={"close":"Close"})
+    if 'Close' not in df.columns:
+        if 'close' in df.columns:
+            df = df.rename(columns={'close':'Close'})
         else:
             return res
-    close = df["Close"].astype(float)
+    close = df['Close'].astype(float)
     res.rsi = compute_rsi(close, period=14)
     res.ema20 = float(close.ewm(span=20, adjust=False).mean().iloc[-1]) if len(close)>=20 else None
     res.ema50 = float(close.ewm(span=50, adjust=False).mean().iloc[-1]) if len(close)>=50 else None
@@ -86,9 +85,9 @@ def compute_indicators(df: pd.DataFrame) -> IndicatorResult:
     res.macd = macd
     res.macd_signal = macd_sig
     res.macd_hist = macd_hist
-    if "Volume" in df.columns and not df["Volume"].empty:
-        res.vol_mean = float(df["Volume"].tail(50).mean())
-        res.vol_last = float(df["Volume"].iloc[-1])
+    if 'Volume' in df.columns and not df['Volume'].empty:
+        res.vol_mean = float(df['Volume'].tail(50).mean())
+        res.vol_last = float(df['Volume'].iloc[-1])
     return res
 
 def decide_signal(ind: IndicatorResult, candle: CandleInfo) -> str:
@@ -114,7 +113,7 @@ def decide_signal(ind: IndicatorResult, candle: CandleInfo) -> str:
             score += 1.0
         else:
             score -= 0.8
-    if ind.sma10 and ind.sma10 > 0 and ind.sma10 < (ind.ema20 or float("inf")):
+    if ind.sma10 and ind.sma10 > 0 and ind.sma10 < (ind.ema20 or float('inf')):
         score += 0.2
     if ind.vol_mean and ind.vol_last is not None and ind.vol_mean > 0:
         if ind.vol_last > 2 * ind.vol_mean:
@@ -132,3 +131,5 @@ def decide_signal(ind: IndicatorResult, candle: CandleInfo) -> str:
     if score <= -1.0:
         return "SELL"
     return ""
+
+# end of indicators.py
