@@ -5,6 +5,7 @@ import pandas as pd
 from telegram import Bot
 from apscheduler.schedulers.background import BackgroundScheduler
 import pytz
+from datetime import datetime
 
 # -------------------------
 # ENV VARIABLES
@@ -29,10 +30,11 @@ TOP10 = {
 }
 
 # -------------------------
-# FETCH OHLC FROM COINGECKO
+# FETCH OHLC (CoinGecko V3)
 # -------------------------
 def fetch_coingecko_ohlc(cgid):
     url = f"https://api.coingecko.com/api/v3/coins/{cgid}/market_chart"
+
     params = {
         "vs_currency": "usd",
         "days": 7,
@@ -40,46 +42,54 @@ def fetch_coingecko_ohlc(cgid):
     }
 
     headers = {
-        "x-cg-api-key": COINGECKO_API_KEY    # <-- CORRECT HEADER
+        "accept": "application/json",
+        "Authorization": f"Bearer {COINGECKO_API_KEY}"  # CORRECT
     }
 
-    r = requests.get(url, params=params, headers=headers, timeout=15)
+    try:
+        r = requests.get(url, params=params, headers=headers, timeout=15)
 
-    if r.status_code != 200:
-        print("CG ERROR:", cgid, r.status_code, r.text[:100])
+        if r.status_code != 200:
+            print(f"CG ERROR: {cgid} {r.status_code} {r.text[:150]}")
+            return None
+
+        data = r.json().get("prices", [])
+        if not data:
+            print(f"CG EMPTY: {cgid}")
+            return None
+
+        df = pd.DataFrame(data, columns=["time", "price"])
+        df["price"] = df["price"].astype(float)
+
+        return df
+
+    except Exception as e:
+        print("CG EXCEPTION:", cgid, e)
         return None
-
-    data = r.json().get("prices", [])
-    if not data:
-        print("CG EMPTY:", cgid)
-        return None
-
-    df = pd.DataFrame(data, columns=["time", "price"])
-    df["price"] = df["price"].astype(float)
-    return df
 
 
 # -------------------------
 # SIMPLE INDICATORS
 # -------------------------
 def compute_indicators(df):
-    df["rsi"] = df["price"].pct_change().rolling(14).mean()
+    df["returns"] = df["price"].pct_change()
+    df["rsi"] = df["returns"].rolling(14).mean()
+
     df["ema20"] = df["price"].ewm(span=20).mean()
     df["ema50"] = df["price"].ewm(span=50).mean()
 
     last = df.iloc[-1]
-
     signals = []
 
+    # RSI signal
     if last["rsi"] < -0.02:
         signals.append("RSI Oversold")
-
     if last["rsi"] > 0.02:
         signals.append("RSI Overbought")
 
+    # Trend signal
     if last["ema20"] > last["ema50"]:
         signals.append("Bullish Trend")
-
     if last["ema20"] < last["ema50"]:
         signals.append("Bearish Trend")
 
@@ -90,7 +100,7 @@ def compute_indicators(df):
 # SEND TELEGRAM ALERT
 # -------------------------
 def send_alert(msg):
-    bot.send_message(chat_id=CHAT_ID, text=msg)
+    bot.send_message(chat_id=CHAT_ID, text=msg, parse_mode="Markdown")
 
 
 # -------------------------
@@ -108,7 +118,7 @@ def job():
         sig = compute_indicators(df)
 
         if sig:
-            text = f"📊 *{cg_id.upper()} SIGNALS:*\n" + "\n".join(["• " + s for s in sig])
+            text = f"📊 *{cg_id.upper()} SIGNALS:*\n" + "\n".join([f"• {s}" for s in sig])
             send_alert(text)
 
     print("Done.")
@@ -123,8 +133,7 @@ sched.add_job(job, "interval", seconds=30)
 sched.start()
 
 print("🚀 Bot started.")
-
-job()  # run once at start
+job()  # run immediately
 
 while True:
     time.sleep(999999)
